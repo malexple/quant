@@ -3,45 +3,46 @@ package ru.mcs.q;
 import ru.mcs.q.field.FaceColor;
 import ru.mcs.q.field.QuantumFieldMesh3D;
 import ru.mcs.q.field.QuantumFieldVisualization;
+import ru.mcs.q.field.Tetrahedron3D;
 import ru.mcs.q.field.Vector3D;
 
 import javax.swing.*;
+import java.util.Map;
 
 public class TriangularBipyramidDemo {
     public static void main(String[] args) {
-        System.out.println("Starting Perfect Alignment Demo...");
+        System.out.println("Starting Sequential Connection Demo...");
 
-        // Создаем сетку тетраэдров
         QuantumFieldMesh3D mesh = new QuantumFieldMesh3D();
 
-        // Создаем тетраэдры с начальными позициями, которые позволят им соединиться правильно
+        // Создаем тетраэдры в последовательности
+        // Сначала создаем центральный тетраэдр T1
         mesh.addTetrahedron("T1", new Vector3D(0, 0, 0), 1.0);
-        mesh.addTetrahedron("T2", new Vector3D(3, 0, 0), 1.0);  // Смещен в сторону для соединения красными гранями
-        mesh.addTetrahedron("T3", new Vector3D(0, 3, 0), 1.0);  // Смещен вверх для соединения синими гранями
-        mesh.addTetrahedron("T4", new Vector3D(0, 0, 3), 1.0);  // Смещен вперед для соединения зелеными гранями
-        mesh.addTetrahedron("T5", new Vector3D(3, 0, 0), 1.0); // Смещен влево для соединения с T2
 
-        // Создаем соединения - теперь грани должны быть идеально параллельны
-        System.out.println("Creating perfectly aligned connections:");
+        // Создаем T2, T3, T4 и соединяем их с T1
+        mesh.addTetrahedron("T2", new Vector3D(2, 0, 0), 1.0);
+        mesh.addTetrahedron("T3", new Vector3D(0, 2, 0), 1.0);
+        mesh.addTetrahedron("T4", new Vector3D(0, 0, 2), 1.0);
 
-        // T1 и T2 соединяются красными гранями
+        // Соединяем T1 с T2, T3, T4
+        System.out.println("Step 1: Connecting T1 with T2, T3, T4");
         mesh.connectTetrahedrons("T1", FaceColor.RED, "T2", FaceColor.RED);
-
-        // T1 и T3 соединяются синими гранями
         mesh.connectTetrahedrons("T1", FaceColor.BLUE, "T3", FaceColor.BLUE);
-
-        // T1 и T4 соединяются зелеными гранями
         mesh.connectTetrahedrons("T1", FaceColor.GREEN, "T4", FaceColor.GREEN);
 
-        // T2 и T5 соединяются синими гранями
+        // Теперь создаем T5 и соединяем его с T2
+        mesh.addTetrahedron("T5", new Vector3D(4, 0, 0), 1.0);
+
+        System.out.println("Step 2: Connecting T2 with T5");
         mesh.connectTetrahedrons("T2", FaceColor.BLUE, "T5", FaceColor.BLUE);
 
-        // Запускаем колебания
+        // Визуализируем нормали для отладки
+        visualizeConnections(mesh);
+
         mesh.startFieldOscillations();
 
-        // Создаем и показываем визуализацию
         SwingUtilities.invokeLater(() -> {
-            JFrame frame = new JFrame("Perfectly Aligned Quantum Field");
+            JFrame frame = new JFrame("Sequential Connection Demo");
             frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
             QuantumFieldVisualization visualization = new QuantumFieldVisualization(mesh);
@@ -50,6 +51,17 @@ public class TriangularBipyramidDemo {
             frame.setLocationRelativeTo(null);
             frame.setVisible(true);
         });
+    }
 
+    private static void visualizeConnections(QuantumFieldMesh3D mesh) {
+        System.out.println("\n--- Connection Visualization ---");
+        for (Tetrahedron3D tetra : mesh.getTetrahedrons().values()) {
+            System.out.println(tetra.getId() + " connections:");
+            for (Map.Entry<FaceColor, Tetrahedron3D> entry : tetra.getConnections().entrySet()) {
+                FaceColor color = entry.getKey();
+                Tetrahedron3D connected = entry.getValue();
+                System.out.printf("  %s → %s[%s]%n", color, connected.getId(), color);
+            }
+        }
     }
 }

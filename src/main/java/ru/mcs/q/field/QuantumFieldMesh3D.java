@@ -30,6 +30,10 @@ public class QuantumFieldMesh3D {
         return false;
     }
 
+    public Tetrahedron3D getTetrahedron(String id) {
+        return tetrahedrons.get(id);
+    }
+
     public void startFieldOscillations() {
         if (!isActive) {
             isActive = true;
@@ -49,20 +53,7 @@ public class QuantumFieldMesh3D {
         tetrahedrons.values().forEach(tetrahedron -> {
             // Случайные колебания энергии
             double oscillation = (Math.random() - 0.5) * 0.1;
-            double newEnergy = Math.max(0, tetrahedron.getEnergyLevel() + oscillation);
-
-            // Можно добавить небольшие случайные вращения для анимации
-            if (Math.random() < 0.3) {
-                // Случайное небольшое вращение
-                Vector3D randomAxis = new Vector3D(
-                        Math.random() - 0.5,
-                        Math.random() - 0.5,
-                        Math.random() - 0.5
-                );
-                double angle = (Math.random() - 0.5) * 0.1;
-                Quaternion rotation = Quaternion.fromAxisAngle(randomAxis, angle);
-                tetrahedron.setOrientation(rotation.multiply(tetrahedron.getOrientation()));
-            }
+            tetrahedron.energyLevel = Math.max(0, tetrahedron.energyLevel + oscillation);
         });
     }
 

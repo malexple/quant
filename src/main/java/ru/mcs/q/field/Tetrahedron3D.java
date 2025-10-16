@@ -8,7 +8,7 @@ public class Tetrahedron3D {
     private Quaternion orientation;
     private final Map<FaceColor, FaceState> faces;
     private final Map<FaceColor, Tetrahedron3D> connections;
-    private double energyLevel;
+    public double energyLevel;
     private final double size;
 
     // Вершины тетраэдра в локальной системе координат
@@ -147,10 +147,10 @@ public class Tetrahedron3D {
             return false;
         }
 
-        if (face == otherFace && face != FaceColor.TRANSPARENT) {
+        if (face == otherFace) {
             if (!connections.containsKey(face) && !other.connections.containsKey(otherFace)) {
-                // Ориентируем тетраэдры для идеального параллельного соединения
-                alignFacesPerfectly(this, face, other, otherFace);
+                // Ориентируем второй тетраэдр относительно первого
+                orientRelativeTo(this, face, other, otherFace);
 
                 connections.put(face, other);
                 other.connections.put(otherFace, this);
@@ -161,7 +161,7 @@ public class Tetrahedron3D {
                 faces.put(face, FaceState.ATTRACTED);
                 other.faces.put(otherFace, FaceState.ATTRACTED);
 
-                System.out.printf("Perfect parallel connection: %s[%s] ↔ %s[%s]%n",
+                System.out.printf("Connection: %s[%s] ↔ %s[%s]%n",
                         id, face, other.id, otherFace);
                 return true;
             }
@@ -169,46 +169,42 @@ public class Tetrahedron3D {
         return false;
     }
 
-    private void alignFacesPerfectly(Tetrahedron3D tetra1, FaceColor face1,
-                                     Tetrahedron3D tetra2, FaceColor face2) {
-        int faceIndex1 = tetra1.getFaceIndex(face1);
-        int faceIndex2 = tetra2.getFaceIndex(face2);
+    private void orientRelativeTo(Tetrahedron3D reference, FaceColor refFace,
+                                  Tetrahedron3D target, FaceColor targetFace) {
+        int refFaceIndex = reference.getFaceIndex(refFace);
+        int targetFaceIndex = target.getFaceIndex(targetFace);
 
-        // Получаем нормали и центры граней в локальных координатах
-        Vector3D normal1 = tetra1.getLocalFaceNormal(faceIndex1);
-        Vector3D normal2 = tetra2.getLocalFaceNormal(faceIndex2);
-        Vector3D center1 = tetra1.getLocalFaceCenter(faceIndex1);
-        Vector3D center2 = tetra2.getLocalFaceCenter(faceIndex2);
+        // Получаем нормаль и центр грани референсного тетраэдра
+        Vector3D refNormal = reference.getFaceNormal(refFaceIndex);
+        Vector3D refCenter = reference.getFaceCenter(refFaceIndex);
 
-        // Мы хотим, чтобы нормаль второй грани была противоположна нормали первой
-        Vector3D desiredNormal2 = normal1.negate();
+        // Получаем локальную нормаль целевой грани
+        Vector3D targetLocalNormal = target.getLocalFaceNormal(targetFaceIndex);
 
-        // Находим вращение, которое переводит normal2 в desiredNormal2
-        Quaternion rotation = findRotation(normal2, desiredNormal2);
+        // Мы хотим, чтобы нормаль целевой грани была противоположна нормали референсной грани
+        Vector3D desiredTargetNormal = refNormal.negate();
 
-        // Применяем это вращение ко второму тетраэдру
-        tetra2.orientation = rotation.multiply(tetra2.orientation);
+        // Находим вращение, которое переводит текущую мировую нормаль целевой грани в желаемую
+        Vector3D currentTargetNormal = target.getFaceNormal(targetFaceIndex);
+        Quaternion rotation = findRotation(currentTargetNormal, desiredTargetNormal);
 
-        // Теперь позиционируем тетраэдры так, чтобы грани были параллельны и обращены друг к другу
-        Vector3D worldFaceCenter1 = tetra1.getFaceCenter(faceIndex1);
-        Vector3D worldFaceCenter2 = tetra2.getFaceCenter(faceIndex2);
+        // Применяем вращение к целевому тетраэдру
+        target.orientation = rotation.multiply(target.orientation);
 
-        // Вычисляем вектор между центрами граней
-        Vector3D between = worldFaceCenter2.subtract(worldFaceCenter1);
+        // Позиционируем целевой тетраэдр так, чтобы грани были обращены друг к другу
+        Vector3D targetCenter = target.getFaceCenter(targetFaceIndex);
+        Vector3D between = targetCenter.subtract(refCenter);
 
-        // Мы хотим, чтобы этот вектор был параллелен нормали первой грани
-        // Проецируем вектор between на нормаль первой грани
-        Vector3D worldNormal1 = tetra1.getFaceNormal(faceIndex1);
-        double projectionLength = between.dot(worldNormal1);
-        Vector3D projection = worldNormal1.multiply(projectionLength);
+        // Проецируем вектор между центрами на нормаль референсной грани
+        double projection = between.dot(refNormal);
+        Vector3D correction = refNormal.multiply(projection);
 
-        // Корректируем позицию второго тетраэдра
-        Vector3D correction = between.subtract(projection);
-        tetra2.position = tetra2.position.subtract(correction);
+        // Корректируем позицию целевого тетраэдра
+        target.position = target.position.subtract(correction);
 
-        // Добавляем небольшое расстояние между гранями для визуализации
+        // Добавляем небольшое расстояние между гранями
         double separation = size * 0.1;
-        tetra2.position = tetra2.position.add(worldNormal1.multiply(separation));
+        target.position = target.position.add(refNormal.multiply(separation));
     }
 
     private Quaternion findRotation(Vector3D from, Vector3D to) {
