@@ -51,8 +51,18 @@ public class QuantumFieldMesh3D {
             double oscillation = (Math.random() - 0.5) * 0.1;
             double newEnergy = Math.max(0, tetrahedron.getEnergyLevel() + oscillation);
 
-            // Обновляем размер в зависимости от энергии
-            double newSize = 0.5 + newEnergy * 0.5;
+            // Можно добавить небольшие случайные вращения для анимации
+            if (Math.random() < 0.3) {
+                // Случайное небольшое вращение
+                Vector3D randomAxis = new Vector3D(
+                        Math.random() - 0.5,
+                        Math.random() - 0.5,
+                        Math.random() - 0.5
+                );
+                double angle = (Math.random() - 0.5) * 0.1;
+                Quaternion rotation = Quaternion.fromAxisAngle(randomAxis, angle);
+                tetrahedron.setOrientation(rotation.multiply(tetrahedron.getOrientation()));
+            }
         });
     }
 

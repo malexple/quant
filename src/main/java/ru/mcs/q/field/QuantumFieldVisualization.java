@@ -4,7 +4,6 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.util.*;
-import java.util.List;
 
 public class QuantumFieldVisualization extends JPanel {
     private final QuantumFieldMesh3D mesh;
@@ -84,21 +83,28 @@ public class QuantumFieldVisualization extends JPanel {
 
     private void drawConnections(Graphics2D g2d) {
         for (Tetrahedron3D tetra : mesh.getTetrahedrons().values()) {
-            Vector3D pos1 = tetra.getPosition();
-
             for (Map.Entry<FaceColor, Tetrahedron3D> entry : tetra.getConnections().entrySet()) {
                 Tetrahedron3D connected = entry.getValue();
                 FaceColor color = entry.getKey();
 
-                Vector3D pos2 = connected.getPosition();
+                // Рисуем линию между центрами соединенных граней
+                int faceIndex1 = tetra.getFaceIndex(color);
+                int faceIndex2 = connected.getFaceIndex(color);
 
-                // Рисуем линию соединения
-                Point p1 = projectPoint(rotatePoint(pos1));
-                Point p2 = projectPoint(rotatePoint(pos2));
+                Vector3D faceCenter1 = tetra.getFaceCenter(faceIndex1);
+                Vector3D faceCenter2 = connected.getFaceCenter(faceIndex2);
+
+                Point p1 = projectPoint(rotatePoint(faceCenter1));
+                Point p2 = projectPoint(rotatePoint(faceCenter2));
 
                 g2d.setColor(toAwtColor(color));
-                g2d.setStroke(new BasicStroke(2));
+                g2d.setStroke(new BasicStroke(3, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
                 g2d.drawLine(p1.x, p1.y, p2.x, p2.y);
+
+                // Рисуем маленькие кружки в центрах граней
+                g2d.setColor(toAwtColor(color).darker());
+                g2d.fillOval(p1.x - 3, p1.y - 3, 6, 6);
+                g2d.fillOval(p2.x - 3, p2.y - 3, 6, 6);
             }
         }
     }
@@ -119,42 +125,66 @@ public class QuantumFieldVisualization extends JPanel {
             projectedVertices[i] = projectPoint(rotatePoint(vertices[i]));
         }
 
-        // Рисуем грани
+        // Сначала рисуем непрозрачные грани
         for (int i = 0; i < faces.length; i++) {
-            int[] face = faces[i];
             FaceColor faceColor = tetra.getFaceColor(i);
-
-            // Пропускаем прозрачные грани
             if (faceColor == FaceColor.TRANSPARENT) continue;
 
+            int[] face = faces[i];
             Polygon polygon = new Polygon();
             for (int vertexIndex : face) {
                 Point p = projectedVertices[vertexIndex];
                 polygon.addPoint(p.x, p.y);
             }
 
-            // Заливаем грань цветом с прозрачностью
+            // Определяем, является ли грань соединенной
+            boolean isConnected = tetra.getConnections().containsKey(faceColor);
+
+            // Заливаем грань цветом с разной прозрачностью
             Color fillColor = toAwtColor(faceColor);
-            g2d.setColor(new Color(fillColor.getRed(), fillColor.getGreen(), fillColor.getBlue(), 100));
+            if (isConnected) {
+                g2d.setColor(new Color(fillColor.getRed(), fillColor.getGreen(), fillColor.getBlue(), 150));
+            } else {
+                g2d.setColor(new Color(fillColor.getRed(), fillColor.getGreen(), fillColor.getBlue(), 80));
+            }
             g2d.fill(polygon);
 
             // Рисуем контур
-            g2d.setColor(fillColor);
-            g2d.setStroke(new BasicStroke(1));
+            g2d.setColor(isConnected ? fillColor.darker() : fillColor);
+            g2d.setStroke(new BasicStroke(isConnected ? 2 : 1));
+            g2d.draw(polygon);
+        }
+
+        // Затем рисуем прозрачную грань (основание)
+        for (int i = 0; i < faces.length; i++) {
+            FaceColor faceColor = tetra.getFaceColor(i);
+            if (faceColor != FaceColor.TRANSPARENT) continue;
+
+            int[] face = faces[i];
+            Polygon polygon = new Polygon();
+            for (int vertexIndex : face) {
+                Point p = projectedVertices[vertexIndex];
+                polygon.addPoint(p.x, p.y);
+            }
+
+            // Рисуем прозрачную грань пунктиром
+            g2d.setColor(new Color(150, 150, 150, 100));
+            g2d.fill(polygon);
+
+            g2d.setColor(Color.GRAY);
+            g2d.setStroke(new BasicStroke(1, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL,
+                    0, new float[]{3}, 0));
             g2d.draw(polygon);
         }
 
         // Рисуем центр тетраэдра
         Point centerPoint = projectPoint(rotatePoint(tetra.getPosition()));
         g2d.setColor(Color.BLACK);
-        g2d.fillOval(centerPoint.x - 3, centerPoint.y - 3, 6, 6);
+        g2d.fillOval(centerPoint.x - 2, centerPoint.y - 2, 4, 4);
 
         // Подписываем тетраэдр
+        g2d.setColor(Color.BLACK);
         g2d.drawString(tetra.getId(), centerPoint.x + 5, centerPoint.y - 5);
-
-        // Показываем энергию
-        g2d.setColor(Color.DARK_GRAY);
-        g2d.drawString(String.format("%.1f", tetra.getEnergyLevel()), centerPoint.x + 5, centerPoint.y + 15);
     }
 
     private Vector3D rotatePoint(Vector3D point) {
@@ -191,6 +221,13 @@ public class QuantumFieldVisualization extends JPanel {
         g2d.drawString("Projection: " + projectionType, 10, 20);
         g2d.drawString("Scale: " + scale, 10, 40);
         g2d.drawString("Tetrahedrons: " + mesh.getTetrahedrons().size(), 10, 60);
-        g2d.drawString("Click to change projection, Drag to rotate, Scroll to zoom", 10, 80);
+        g2d.drawString("Connections: " + countConnections(), 10, 80);
+        g2d.drawString("Click to change projection, Drag to rotate, Scroll to zoom", 10, 100);
+    }
+
+    private int countConnections() {
+        return mesh.getTetrahedrons().values().stream()
+                .mapToInt(t -> t.getConnections().size())
+                .sum() / 2;
     }
 }

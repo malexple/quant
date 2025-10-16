@@ -9,7 +9,7 @@ import javax.swing.*;
 
 public class VisualizationMain {
     public static void main(String[] args) {
-        System.out.println("Starting 3D Quantum Field Visualization...");
+        System.out.println("Starting 3D Quantum Field Visualization with Face Orientation...");
 
         // Создаем сетку тетраэдров
         QuantumFieldMesh3D mesh = new QuantumFieldMesh3D();
@@ -23,7 +23,8 @@ public class VisualizationMain {
         mesh.addTetrahedron("T6", new Vector3D(1, 1, 1), 0.5);
         mesh.addTetrahedron("T7", new Vector3D(-1, -1, -1), 0.5);
 
-        // Создаем соединения
+        // Создаем соединения - теперь грани будут ориентированы друг к другу
+        System.out.println("\nCreating oriented connections:");
         mesh.connectTetrahedrons("T1", FaceColor.RED, "T2", FaceColor.RED);
         mesh.connectTetrahedrons("T1", FaceColor.BLUE, "T3", FaceColor.BLUE);
         mesh.connectTetrahedrons("T1", FaceColor.GREEN, "T4", FaceColor.GREEN);
@@ -36,7 +37,7 @@ public class VisualizationMain {
 
         // Создаем и показываем визуализацию
         SwingUtilities.invokeLater(() -> {
-            JFrame frame = new JFrame("3D Quantum Field Visualization");
+            JFrame frame = new JFrame("3D Quantum Field Visualization - Oriented Faces");
             frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
             QuantumFieldVisualization visualization = new QuantumFieldVisualization(mesh);
