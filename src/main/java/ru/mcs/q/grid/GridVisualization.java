@@ -3,6 +3,8 @@ package ru.mcs.q.grid;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
+import java.util.ArrayList;
+import java.util.List;
 
 public class GridVisualization extends JPanel {
 
@@ -41,40 +43,50 @@ public class GridVisualization extends JPanel {
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
         Graphics2D g2 = (Graphics2D) g;
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-        double maxE = field.getMaxEnergy();
-        double minE = field.getMinEnergy();
+        double maxE  = field.getMaxEnergy();
+        double minE  = field.getMinEnergy();
         double range = maxE - minE;
         if (range < 1e-9) range = 1.0;
 
+        // === Рисуем тепловую карту поля ===
         for (int y = 0; y < GridField.HEIGHT; y++) {
             for (int x = 0; x < GridField.WIDTH; x++) {
-                // t=0.0 → минимум (отрицательная амплитуда, синий)
-                // t=0.5 → ноль (чёрный)
-                // t=1.0 → максимум (красный/белый)
                 double t = (field.getDisplay(x, y) - minE) / range;
                 g2.setColor(heatColor(t));
                 g2.fillRect(x * CELL, y * CELL, CELL, CELL);
             }
         }
 
-        // Инфо-панель
+        // === Рисуем границы доменов (частицы) поверх карты ===
+        List<int[]> particles = field.detectParticles();
+        g2.setColor(new Color(255, 255, 255, 180)); // полупрозрачный белый
+        for (int[] p : particles) {
+            g2.fillRect(p[0] * CELL + CELL / 4,
+                    p[1] * CELL + CELL / 4,
+                    CELL / 2, CELL / 2);
+        }
+
+        // === Инфо-панель ===
         g2.setColor(new Color(15, 15, 15));
         g2.fillRect(0, GridField.HEIGHT * CELL, GridField.WIDTH * CELL, INFO_H);
 
         g2.setFont(new Font("Monospaced", Font.PLAIN, 13));
         g2.setColor(Color.WHITE);
         g2.drawString(String.format(
-                        "Tick: %6d  |  Nodes: %,d  |  ΣE: %,.1f  |  min: %.3f  max: %.3f",
+                        "Tick: %6d  |  Nodes: %,d  |  ΣE: %,.1f  |  min: %.1f  max: %.1f",
                         field.getTick(),
                         GridField.WIDTH * GridField.HEIGHT,
                         field.getTotalEnergy(),
                         minE, maxE),
                 8, GridField.HEIGHT * CELL + 18);
 
-        g2.setColor(Color.GRAY);
-        g2.drawString(
-                "LMB / drag = +энергия    RMB = -энергия    Topology: TORUS",
+        // Счётчик частиц — ключевое число
+        g2.setColor(particles.isEmpty() ? Color.GRAY : Color.YELLOW);
+        g2.drawString(String.format(
+                        "Частицы (границы доменов): %d  |  Topology: TORUS  |  φ⁴ potential  V=%.0f",
+                        particles.size(), GridField.V),
                 8, GridField.HEIGHT * CELL + 36);
     }
 

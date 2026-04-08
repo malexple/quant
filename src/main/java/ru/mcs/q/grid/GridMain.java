@@ -1,31 +1,29 @@
 package ru.mcs.q.grid;
 
 import javax.swing.*;
+import java.io.PrintStream;
+import java.io.UnsupportedEncodingException;
 
 public class GridMain {
-    public static void main(String[] args) {
+    public static void main(String[] args) throws UnsupportedEncodingException {
+        System.setOut(new PrintStream(System.out, false, "UTF-8"));
+
         System.out.println("🌌 Quantum Field — 10,000 узлов");
-        System.out.println("Топология : ТОРУС (закольцованная вселенная)");
-        System.out.println("Правило   : ΔE = FLOW_RATE * Laplacian(E)  [уравнение теплопроводности]");
-        System.out.println("FLOW_RATE = 0.24  |  DAMPING = 0.999/tick  |  20 тиков/сек");
-        System.out.println();
+        System.out.println("Топология : ТОРУС");
+        System.out.println("Правило   : Волновое уравнение + φ⁴ потенциал");
 
         GridField field = new GridField();
 
-        // Одна точка возбуждения — смотрим как волна расходится
-        field.excite(50, 50, 10000.0);
-        System.out.println("✦ Начальное возбуждение: (50, 50) E=10000");
-        System.out.println("  Наблюдайте: волна уйдёт к краям, обогнёт тор и вернётся.");
-        System.out.println("  При встрече двух фронтов — интерференционный узор.");
-
-        // Можно раскомментировать для сразу двух источников (интерференция):
-        // field.excite(25, 50, 10000.0);
+        // БЫЛО: 10000 — слишком большое, потенциал взрывается
+        // СТАЛО: 2*V = 600 — поле немного выше вакуума, устойчиво
+        field.excite(50, 50, 600.0);
+        System.out.println("✦ Возбуждение: (50,50) = 600  [= 2*V]");
 
         field.start(50);
 
         SwingUtilities.invokeLater(() -> {
             JFrame frame = new JFrame(
-                    "Quantum Field — 10,000 Nodes — Gradient Propagation (Toroidal)");
+                    "Quantum Field — 10,000 Nodes — φ⁴ Solitons (Toroidal)");
             frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
             frame.setResizable(false);
             frame.add(new GridVisualization(field));
