@@ -9,6 +9,9 @@ public class QuantumFieldMesh {
     private final Map<String, Tetrahedron> tetrahedrons;
     private final ScheduledExecutorService scheduler;
     private boolean isActive;
+    private static final double FLOW_RATE = 0.30; // 30% градиента за тик
+    private static final double DAMPING   = 0.999;
+    private int tickCount = 0;
 
     public QuantumFieldMesh() {
         this.tetrahedrons = new ConcurrentHashMap<>();
@@ -49,16 +52,16 @@ public class QuantumFieldMesh {
     }
 
     private void updateField() {
-        System.out.println("\n=== Обновление квантового поля ===");
+        System.out.println("\n=== Tick #" + tickCount++ + " ===");
 
-        // Обновляем все тетраэдры
-        tetrahedrons.values().forEach(tetrahedron -> {
-            tetrahedron.oscillate();
-            System.out.println(tetrahedron);
+        // Фаза 1: все вычисляют дельту одновременно (нет зависимости от порядка)
+        tetrahedrons.values().forEach(t -> t.computeGradientFlow(FLOW_RATE));
+
+        // Фаза 2: все применяют
+        tetrahedrons.values().forEach(t -> {
+            t.applyDelta(DAMPING);
+            System.out.println(t);
         });
-
-        // Спонтанные соединения
-        attemptSpontaneousConnections();
 
         printFieldState();
     }

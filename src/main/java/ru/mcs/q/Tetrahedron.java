@@ -10,6 +10,7 @@ public class Tetrahedron {
     private final Map<FaceColor, FaceState> faces;
     private final Map<FaceColor, Tetrahedron> connections;
     private double energyLevel;
+    private volatile double pendingDelta = 0.0;
 
     public Tetrahedron(String id) {
         this.id = id;
@@ -95,5 +96,26 @@ public class Tetrahedron {
     public String toString() {
         return String.format("Тетраэдр[%s] энергия=%.2f соединения=%s",
                 id, energyLevel, connections.keySet());
+    }
+
+    /**
+     * Фаза 1: вычислить дельту по градиенту соседей (НЕ применять).
+     * Вызывать для всех тетраэдров ДО applyDelta().
+     */
+    public void computeGradientFlow(double flowRate) {
+        double inflow = 0.0;
+        for (Tetrahedron neighbor : connections.values()) {
+            inflow += (neighbor.energyLevel - this.energyLevel) * flowRate;
+        }
+        this.pendingDelta = inflow;
+    }
+
+    /**
+     * Фаза 2: применить ранее вычисленную дельту.
+     * Вызывать ПОСЛЕ того как computeGradientFlow вызван у всех.
+     */
+    public void applyDelta(double damping) {
+        energyLevel = Math.max(0, energyLevel * damping + pendingDelta);
+        pendingDelta = 0;
     }
 }
