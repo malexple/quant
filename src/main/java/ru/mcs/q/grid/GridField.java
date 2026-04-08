@@ -14,6 +14,7 @@ public class GridField {
     private final double[][] energy  = new double[HEIGHT][WIDTH];
     private final double[][] buffer  = new double[HEIGHT][WIDTH];
     private final double[][] display = new double[HEIGHT][WIDTH]; // снимок для рендера
+    private final double[][] velocity = new double[HEIGHT][WIDTH];
 
     private final ScheduledExecutorService scheduler =
             Executors.newSingleThreadScheduledExecutor();
@@ -53,18 +54,18 @@ public class GridField {
             for (int y = 0; y < HEIGHT; y++) {
                 for (int x = 0; x < WIDTH; x++) {
                     double center = energy[y][x];
-
-                    // 4 соседа с wraparound (торус)
-                    double left  = energy[y][(x - 1 + WIDTH) % WIDTH];
+                    double left  = energy[y][(x - 1 + WIDTH)  % WIDTH];
                     double right = energy[y][(x + 1) % WIDTH];
                     double up    = energy[(y - 1 + HEIGHT) % HEIGHT][x];
                     double down  = energy[(y + 1) % HEIGHT][x];
 
                     double laplacian = left + right + up + down - 4.0 * center;
-                    buffer[y][x] = Math.max(0, center * DAMPING + FLOW_RATE * laplacian);
+
+                    // Волновое уравнение: ускорение ∝ Лапласиан
+                    velocity[y][x] = velocity[y][x] * DAMPING + FLOW_RATE * laplacian;
+                    buffer[y][x]   = Math.max(0, center + velocity[y][x]);
                 }
             }
-            // Атомарный своп буферов
             for (int y = 0; y < HEIGHT; y++) {
                 System.arraycopy(buffer[y], 0, energy[y], 0, WIDTH);
                 System.arraycopy(energy[y], 0, display[y], 0, WIDTH);
