@@ -43,11 +43,16 @@ public class GridVisualization extends JPanel {
         Graphics2D g2 = (Graphics2D) g;
 
         double maxE = field.getMaxEnergy();
-        if (maxE < 1e-9) maxE = 1.0;
+        double minE = field.getMinEnergy();
+        double range = maxE - minE;
+        if (range < 1e-9) range = 1.0;
 
         for (int y = 0; y < GridField.HEIGHT; y++) {
             for (int x = 0; x < GridField.WIDTH; x++) {
-                double t = Math.max(0, Math.min(1, field.getDisplay(x, y) / maxE));
+                // t=0.0 → минимум (отрицательная амплитуда, синий)
+                // t=0.5 → ноль (чёрный)
+                // t=1.0 → максимум (красный/белый)
+                double t = (field.getDisplay(x, y) - minE) / range;
                 g2.setColor(heatColor(t));
                 g2.fillRect(x * CELL, y * CELL, CELL, CELL);
             }
@@ -60,11 +65,11 @@ public class GridVisualization extends JPanel {
         g2.setFont(new Font("Monospaced", Font.PLAIN, 13));
         g2.setColor(Color.WHITE);
         g2.drawString(String.format(
-                        "Tick: %6d  |  Nodes: %,d  |  ΣE: %,.1f  |  max: %.4f",
+                        "Tick: %6d  |  Nodes: %,d  |  ΣE: %,.1f  |  min: %.3f  max: %.3f",
                         field.getTick(),
                         GridField.WIDTH * GridField.HEIGHT,
                         field.getTotalEnergy(),
-                        field.getMaxEnergy()),
+                        minE, maxE),
                 8, GridField.HEIGHT * CELL + 18);
 
         g2.setColor(Color.GRAY);
@@ -74,24 +79,37 @@ public class GridVisualization extends JPanel {
     }
 
     /**
-     * Тепловая шкала: чёрный → синий → голубой → жёлтый → красный → белый
+     * Двухполярная шкала для волновой функции:
+     *   t=0.0  → синий    (−амплитуда, destructive)
+     *   t=0.25 → голубой
+     *   t=0.5  → чёрный   (ноль, нет возбуждения)
+     *   t=0.75 → жёлтый
+     *   t=1.0  → белый    (+амплитуда, constructive)
      */
     private Color heatColor(double t) {
+        t = Math.max(0, Math.min(1, t));
+
         float[][] keys = {
-                {0f, 0f, 0f},   // 0.0  чёрный
-                {0f, 0f, 1f},   // 0.2  синий
-                {0f, 1f, 1f},   // 0.4  голубой
-                {1f, 1f, 0f},   // 0.6  жёлтый
-                {1f, 0f, 0f},   // 0.8  красный
-                {1f, 1f, 1f},   // 1.0  белый
+                {0.0f, 0.0f, 0.8f},  // 0.00  синий (−max)
+                {0.0f, 0.5f, 1.0f},  // 0.25  голубой
+                {0.0f, 0.0f, 0.0f},  // 0.50  чёрный (ноль)
+                {1.0f, 0.8f, 0.0f},  // 0.75  жёлтый
+                {1.0f, 1.0f, 1.0f},  // 1.00  белый (+max)
         };
-        double pos = t * (keys.length - 1);
-        int    seg = (int) Math.min(pos, keys.length - 2);
+
+        double pos  = t * (keys.length - 1);
+        int    seg  = (int) Math.min(pos, keys.length - 2);
         double frac = pos - seg;
+
         float r  = lerp(keys[seg][0], keys[seg + 1][0], frac);
         float gv = lerp(keys[seg][1], keys[seg + 1][1], frac);
         float b  = lerp(keys[seg][2], keys[seg + 1][2], frac);
-        return new Color(r, gv, b);
+
+        return new Color(
+                Math.max(0f, Math.min(1f, r)),
+                Math.max(0f, Math.min(1f, gv)),
+                Math.max(0f, Math.min(1f, b))
+        );
     }
 
     private float lerp(float a, float b, double t) {

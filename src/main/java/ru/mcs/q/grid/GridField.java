@@ -63,7 +63,7 @@ public class GridField {
 
                     // Волновое уравнение: ускорение ∝ Лапласиан
                     velocity[y][x] = velocity[y][x] * DAMPING + FLOW_RATE * laplacian;
-                    buffer[y][x]   = Math.max(0, center + velocity[y][x]);
+                    buffer[y][x] = center + velocity[y][x];
                 }
             }
             for (int y = 0; y < HEIGHT; y++) {
@@ -89,5 +89,12 @@ public class GridField {
         for (double[] row : display)
             for (double v : row) if (v > max) max = v;
         return max;
+    }
+
+    public double getMinEnergy() {
+        double min = Double.MAX_VALUE;
+        for (double[] row : display)
+            for (double v : row) if (v < min) min = v;
+        return min;
     }
 }
