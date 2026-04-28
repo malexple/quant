@@ -10,9 +10,6 @@ import java.util.List;
 
 public class TetraMeshDemo extends JFrame {
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // ТЕТРАЭДР
-    // ═══════════════════════════════════════════════════════════════════════════
     static class TNode {
         final int id;
         int[]      vertexIds = new int[4];
@@ -30,15 +27,9 @@ public class TetraMeshDemo extends JFrame {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // СЕТКА
-    // ═══════════════════════════════════════════════════════════════════════════
     static final double STEP = 2.0;
     static final double SQ3  = Math.sqrt(3.0);
-    static final double SNAP = STEP * 0.001;          // повышенная точность
-    static final double CMIN = STEP * 0.28;           // мин. расстояние между центрами (оставлено для совместимости)
-    static final double EPS_VOLUME = 1e-8;            // мин. объём тетраэдра
-    static final double EDGE_TOL = 0.2 * STEP;        // допуск длины ребра при закрытии зазоров
+    static final double SNAP = STEP * 0.001;
 
     final List<TNode>          nodes       = new ArrayList<>();
     final List<double[]>       vertices    = new ArrayList<>();
@@ -58,58 +49,14 @@ public class TetraMeshDemo extends JFrame {
     }
 
     void grow() {
+        // Снимок всех свободных граней на данный момент
         List<int[]> free = snapshot();
-        closeGaps(free);      // аккуратно закрываем зазоры (только если тетраэдр хороший)
-        growOut(free);        // отращиваем наружу на всех свободных гранях
-    }
-
-    // ── Закрытие зазоров (только когда из двух граней получается правильный тетраэдр) ──
-    void closeGaps(List<int[]> free) {
-        Map<Long, List<int[]>> em = new HashMap<>();
-        for (int[] ff : free) {
-            TNode n = nodes.get(ff[0]);
-            if (n.neighbors[ff[1]] != null) continue;
-            int[] fv = faceVerts(n, ff[1]);
-            for (int i = 0; i < 3; i++)
-                em.computeIfAbsent(edgeKey(fv[i], fv[(i + 1) % 3]), k -> new ArrayList<>())
-                        .add(new int[]{ff[0], ff[1]});
-        }
-
-        for (List<int[]> cands : em.values()) {
-            if (cands.size() < 2) continue;
-            int[] f1 = cands.get(0), f2 = cands.get(1);
-            if (f1[0] == f2[0]) continue;               // разные узлы
-            TNode n1 = nodes.get(f1[0]), n2 = nodes.get(f2[0]);
-            if (n1.neighbors[f1[1]] != null || n2.neighbors[f2[1]] != null) continue;
-
-            int[] fv1 = faceVerts(n1, f1[1]), fv2 = faceVerts(n2, f2[1]);
-            int[] v4 = merge4(fv1, fv2);
-            if (v4 == null) continue;
-
-            // ★★★ проверяем, что из этих четырёх вершин можно построить хороший тетраэдр ★★★
-            if (!isValidGapTet(v4)) continue;
-
-            TNode ex = tetWith(v4[0], v4[1], v4[2], v4[3]);
-            if (ex != null) {
-                tryLink(n1, f1[1], ex, fv1);
-                tryLink(n2, f2[1], ex, fv2);
-                continue;
-            }
-
-            double[] c = centroid4(v4);
-            if (centerClose(c)) continue;
-
-            TNode nb = makeTet(v4[0], v4[1], v4[2], v4[3]);
-            tryLink(n1, f1[1], nb, fv1);
-            tryLink(n2, f2[1], nb, fv2);
-        }
-    }
-
-    // ── Рост наружу (отражение вершины) ──────────────────────────────────────
-    void growOut(List<int[]> free) {
+        // Обрабатываем КАЖДУЮ свободную грань
         for (int[] ff : free) {
             TNode src = nodes.get(ff[0]);
-            if (src.neighbors[ff[1]] == null) tryOut(src, ff[1]);
+            if (src.neighbors[ff[1]] == null) {
+                tryOut(src, ff[1]);
+            }
         }
     }
 
@@ -119,61 +66,30 @@ public class TetraMeshDemo extends JFrame {
         int vO = src.vertexIds[fi];
         double[] pA = vertices.get(vA), pB = vertices.get(vB), pC = vertices.get(vC), pO = vertices.get(vO);
 
-        // отражаем вершину vO относительно плоскости (A,B,C)
+        // Отражение вершины vO относительно плоскости (A,B,C)
         double[] apex = reflect(pO, pA, pB, pC);
 
-        // если вершина уже существует, пытаемся приклеиться к существующему тетраэдру
+        // Ищем существующую вершину с такими же координатами (с точностью SNAP)
         String key = snapKey(apex[0], apex[1], apex[2]);
+        int vApex;
         if (vertexIndex.containsKey(key)) {
-            int vA2 = vertexIndex.get(key);
-            TNode nb = tetWith(vA, vB, vC, vA2);
-            if (nb != null) {
-                int fB = faceOf(nb, vA, vB, vC);
-                if (fB >= 0 && nb.neighbors[fB] == null) link(src, fi, nb, fB);
-            }
-            return;
+            vApex = vertexIndex.get(key);
+        } else {
+            vApex = vert(apex[0], apex[1], apex[2]);
         }
 
-        // проверяем, не слишком ли близок центр будущего тетраэдра к существующим
-        double[] c = new double[]{
-                (pA[0] + pB[0] + pC[0] + apex[0]) * 0.25,
-                (pA[1] + pB[1] + pC[1] + apex[1]) * 0.25,
-                (pA[2] + pB[2] + pC[2] + apex[2]) * 0.25
-        };
-        if (centerClose(c)) return;
-
-        int vApex = vert(apex[0], apex[1], apex[2]);
-        TNode nb = makeTet(vA, vB, vC, vApex);
+        // Проверяем, не существует ли уже тетраэдр с этими четырьмя вершинами
+        TNode nb = tetWith(vA, vB, vC, vApex);
+        if (nb == null) {
+            nb = makeTet(vA, vB, vC, vApex);
+        }
         int fB = faceOf(nb, vA, vB, vC);
-        if (fB >= 0) link(src, fi, nb, fB);
-    }
-
-    // ── Проверка для зазора: 4 вершины должны образовывать почти правильный тетраэдр ──
-    boolean isValidGapTet(int[] vIds) {
-        if (vIds.length != 4) return false;
-        double[][] p = new double[4][];
-        for (int i = 0; i < 4; i++) p[i] = vertices.get(vIds[i]);
-
-        // объём
-        double[] ab = sub(p[1], p[0]);
-        double[] ac = sub(p[2], p[0]);
-        double[] ad = sub(p[3], p[0]);
-        double vol = Math.abs(dot(ab, cross(ac, ad))) / 6.0;
-        if (vol < EPS_VOLUME) return false;
-
-        // все шесть рёбер должны быть близки к STEP
-        int[][] edges = {{0,1},{0,2},{0,3},{1,2},{1,3},{2,3}};
-        for (int[] e : edges) {
-            double dx = p[e[0]][0] - p[e[1]][0];
-            double dy = p[e[0]][1] - p[e[1]][1];
-            double dz = p[e[0]][2] - p[e[1]][2];
-            double len = Math.sqrt(dx*dx + dy*dy + dz*dz);
-            if (Math.abs(len - STEP) > EDGE_TOL) return false;
+        if (fB >= 0 && nb.neighbors[fB] == null) {
+            link(src, fi, nb, fB);
         }
-        return true;
     }
 
-    // ── Остальные вспомогательные методы (без изменений, кроме reflect) ──────────
+    // --------------------- ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ (без изменений) -------------------
     List<int[]> snapshot() {
         List<int[]> free = new ArrayList<>();
         for (int i = 0; i < nodes.size(); i++) {
@@ -184,47 +100,9 @@ public class TetraMeshDemo extends JFrame {
         return free;
     }
 
-    void tryLink(TNode s, int sf, TNode nb, int[] sfv) {
-        if (s.neighbors[sf] != null) return;
-        int fB = faceOf(nb, sfv[0], sfv[1], sfv[2]);
-        if (fB >= 0 && nb.neighbors[fB] == null) link(s, sf, nb, fB);
-    }
-
     int[] faceVerts(TNode n, int fi) {
         int[] oi = other(fi);
         return new int[]{n.vertexIds[oi[0]], n.vertexIds[oi[1]], n.vertexIds[oi[2]]};
-    }
-
-    int[] merge4(int[] a, int[] b) {
-        Set<Integer> s = new LinkedHashSet<>();
-        for (int v : a) s.add(v);
-        for (int v : b) s.add(v);
-        if (s.size() != 4) return null;
-        int[] r = new int[4];
-        int i = 0;
-        for (int v : s) r[i++] = v;
-        return r;
-    }
-
-    long edgeKey(int a, int b) {
-        int lo = Math.min(a, b), hi = Math.max(a, b);
-        return (long) lo * 1_000_000L + hi;
-    }
-
-    double[] centroid4(int[] v) {
-        double[] a = vertices.get(v[0]), b = vertices.get(v[1]), c = vertices.get(v[2]), d = vertices.get(v[3]);
-        return new double[]{(a[0] + b[0] + c[0] + d[0]) * 0.25,
-                (a[1] + b[1] + c[1] + d[1]) * 0.25,
-                (a[2] + b[2] + c[2] + d[2]) * 0.25};
-    }
-
-    boolean centerClose(double[] c) {
-        double m2 = CMIN * CMIN;
-        for (TNode n : nodes) {
-            double dx = n.cx - c[0], dy = n.cy - c[1], dz = n.cz - c[2];
-            if (dx*dx + dy*dy + dz*dz < m2) return true;
-        }
-        return false;
     }
 
     TNode makeTet(int v0, int v1, int v2, int v3) {
@@ -290,7 +168,6 @@ public class TetraMeshDemo extends JFrame {
         return -1;
     }
 
-    // правильное отражение точки p относительно плоскости (a,b,c)
     static double[] reflect(double[] p, double[] a, double[] b, double[] c) {
         double[] n = cross(sub(b, a), sub(c, a));
         double nl = Math.sqrt(n[0]*n[0] + n[1]*n[1] + n[2]*n[2]);
@@ -334,9 +211,7 @@ public class TetraMeshDemo extends JFrame {
         return Math.max(r, 0.001);
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // ВИЗУАЛИЗАЦИЯ (без изменений)
-    // ═══════════════════════════════════════════════════════════════════════════
+    // ---------------------------- ВИЗУАЛИЗАЦИЯ (без изменений) -------------------------
     static final int[][] EDGES = {{0,1},{0,2},{0,3},{1,2},{1,3},{2,3}};
     static final Color[] EC = {new Color(220,60,60), new Color(60,120,220),
             new Color(60,200,80), new Color(180,100,220),
